@@ -40,8 +40,8 @@ export function calculateEstimate(project: ProjectConfig): CalculationResult {
 
     const hasCustom =
       typeof project.customRates[tpl.id] === 'number' &&
-      !Number.isNaN(project.customRates[tpl.id]);
-    const appliedRate = hasCustom ? project.customRates[tpl.id] : defaultRate;
+      Number.isFinite(project.customRates[tpl.id]);
+    const appliedRate = hasCustom ? Math.max(0, project.customRates[tpl.id]) : defaultRate;
 
     return {
       id: tpl.id,

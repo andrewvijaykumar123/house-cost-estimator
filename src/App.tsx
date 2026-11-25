@@ -2,26 +2,50 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { EstimatorTab } from './components/EstimatorTab';
 import { Header } from './components/Header';
 import { PrintSummary } from './components/PrintSummary';
-import { createDefaultProject } from './data/estimationData';
+import { CITY_TIERS, QUALITY_TIERS, createDefaultProject } from './data/estimationData';
 import { ProjectConfig } from './types';
 import { calculateEstimate } from './utils/calculator';
 import { exportEstimateToCSV } from './utils/formatters';
 
 const STORAGE_ACTIVE_KEY = 'nirmaanest_active_project_v1';
 
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
+// Keep only stored fields whose type matches the default, so tampered storage can't break the app.
+function mergeTyped<T extends object>(defaults: T, stored: unknown): T {
+  if (!isPlainObject(stored)) return defaults;
+  const out = { ...defaults } as Record<string, unknown>;
+  for (const [key, def] of Object.entries(defaults)) {
+    const val = stored[key];
+    if (typeof def === 'number' ? Number.isFinite(val) : typeof val === typeof def && !isPlainObject(def)) {
+      out[key] = val;
+    }
+  }
+  return out as T;
+}
+
 function loadInitialActive(): ProjectConfig {
   const defaults = createDefaultProject();
   try {
     const raw = localStorage.getItem(STORAGE_ACTIVE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<ProjectConfig>;
+      const parsed: unknown = JSON.parse(raw);
+      if (!isPlainObject(parsed)) return defaults;
+      const merged = mergeTyped(defaults, parsed);
+      const customRates: Record<string, number> = {};
+      if (isPlainObject(parsed.customRates)) {
+        for (const [id, rate] of Object.entries(parsed.customRates)) {
+          if (typeof rate === 'number' && Number.isFinite(rate) && rate >= 0) customRates[id] = rate;
+        }
+      }
       return {
-        ...defaults,
-        ...parsed,
-        addOns: {
-          ...defaults.addOns,
-          ...(parsed.addOns ?? {}),
-        },
+        ...merged,
+        qualityTier: QUALITY_TIERS.some((t) => t.id === merged.qualityTier) ? merged.qualityTier : defaults.qualityTier,
+        cityTier: CITY_TIERS.some((c) => c.id === merged.cityTier) ? merged.cityTier : defaults.cityTier,
+        areaInputMode: merged.areaInputMode === 'plot' ? 'plot' : 'direct',
+        customRates,
+        addOns: mergeTyped(defaults.addOns, parsed.addOns),
       };
     }
   } catch {

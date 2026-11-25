@@ -165,7 +165,16 @@ export function exportEstimateToCSV(
   }
 
   const csvContent = rows
-    .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .map((r) =>
+      r
+        .map((cell) => {
+          // Prefix formula-like text so spreadsheets treat it as a literal (CSV injection).
+          const raw = String(cell);
+          const text = /^-?\d+(\.\d+)?$/.test(raw) ? raw : raw.replace(/^[=+\-@\t\r]/, "'$&");
+          return `"${text.replace(/"/g, '""')}"`;
+        })
+        .join(',')
+    )
     .join('\n');
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
